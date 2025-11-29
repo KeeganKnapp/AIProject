@@ -1,0 +1,182 @@
+﻿@using MapColoringApp.Services
+@using MudBlazor
+@using System.Diagnostics
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IColoringService ColoringService
+@page "/"
+
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
+<MudPaper Class="pa-4" Style="max-width: 900px; width: 100%;">
+<PageTitle>Interactive Map Coloring!!</PageTitle>
+
+<h1>Interactive US Map</h1>
+
+
+<object id="us-map" type="image/svg+xml" data="maps/us.svg" width="800" height="500"></object>
+
+
+<MudCard Elevation="1" Class="pa-4 mt-4">
+<MudText Typo="Typo.h6" Class="mt-4">Select Number of Colors:</MudText>
+
+<MudButton @onclick="OpenColorPicker" Variant="Variant.Filled" Color="Color.Secondary">
+Add New Color
+</MudButton>
+
+<MudText>Number of Colors: @colors.Count</MudText>
+
+<MudToggleGroup T="int" SelectionMode="SelectionMode.SingleSelection" Value="selectedColor" ValueChanged="@OnColorSelected">
+
+@for(int i = 0; i < NumColors; i ++) {
+	<MudToggleItem Value="i" Style="@GetButtonStyle(i)" Class="color-toggle-item" Text="">
+		</MudToggleItem>
+}
+
+</MudToggleGroup>
+
+<MudText>@status</MudText>
+
+<style>
+.color-toggle-item.mud-toggle-item-selected {
+border: 3px solid #000 !important;
+	box-shadow: 0 0 10px rgba(0,0,0,0.5) !important;
+transform: scale(1.05);
+transition: all 0.2s ease;
+}
+
+.color-toggle-item:hover {
+transform: scale(1.02);
+transition: all 0.2s ease;
+}
+
+.color-toggle-item {
+margin: 4px !important;
+	border-radius: 8px !important;
+}
+</style>
+</MudCard>
+
+</MudPaper>
+</div>
+@if (colorPickerOpen) {
+	<MudCard Style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+		<MudCardHeader>
+		<CardHeaderContent>
+		<MudText>Pick a color to add!</MudText>	
+		</CardHeaderContent>
+		</MudCardHeader>		
+		<MudCardContent>
+		<MudColorPicker Label="Color picker" @bind-Text="pickedColor" Style="@($"color: {pickedColor};")" Placeholder="Select color" />
+		</MudCardContent>
+		<MudCardActions>
+		<MudButton OnClick="CancelColorPicker">Cancel</MudButton>
+		<MudButton Color="Color.Primary" OnClick="SaveColorPicker">Save</MudButton>
+		</MudCardActions>
+		</MudCard>
+}
+
+@code {
+	string status = "";
+
+
+	//color picker
+	private bool colorPickerOpen = false;
+	private string pickedColor = "#ffffff";
+
+	//store to send to backend and js
+	private int selectedColor = 0;
+	private int NumColors => colors.Count;
+	private List<string> colors = new() { "#FF0000", "#00FF00", "#0000FF", "#FFFF00" };
+
+
+
+	private Dictionary<string, int?> StateAssignments = new();
+
+	[JSInvokable]
+		public async Task OnStateClicked(string stateId) {
+			//submit to coloring service to send to backend (tensorflow)
+			var req = new ColoringRequest(stateId, selectedColor, colors);
+			_ = ColoringService.StartAsync(req);
+
+
+			//set color to state in js
+			status = stateId;
+			await ColorState(stateId, selectedColor);
+			StateHasChanged();
+		}
+
+	public async Task ColorState(string stateId, int index) {
+		await JS.InvokeVoidAsync("colorState", stateId, colors[index]);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			StartStateClickMonitoring();
+		}
+	}
+
+	protected override async void OnInitialized()
+	{
+
+		await JS.InvokeVoidAsync("setDotNetReference", DotNetObjectReference.Create(this));
+		selectedColor = 0;
+		// Initialization logic here
+	}
+
+	//color picker functions
+	private Task OpenColorPicker() {
+		colorPickerOpen = true;
+		StateHasChanged();
+		return Task.CompletedTask;
+	}
+
+	private Task CancelColorPicker() {
+		colorPickerOpen = false;
+		return Task.CompletedTask;
+	}
+
+	private Task SaveColorPicker() {
+		colorPickerOpen = false;
+		colors.Add(pickedColor);
+		selectedColor = colors.Count - 1;
+		return Task.CompletedTask;
+	}
+
+	private async void StartStateClickMonitoring()
+	{
+		while (true)
+		{
+			try
+			{
+				var clickedState = await JS.InvokeAsync<string>("getLastClickedState");
+				if (!string.IsNullOrEmpty(clickedState))
+				{
+					Console.WriteLine($"State clicked: {clickedState}");
+					await OnStateClicked(clickedState);
+				}
+				await Task.Delay(100); // Check every 100ms
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Error monitoring state clicks: {ex.Message}");
+				break;
+			}
+		}
+	}
+
+	private string GetButtonStyle(int index)
+	{
+		return $"background-color:{colors[index]} !important; width:200px; height:50px; border: 3px solid transparent; --mud-palette-action-default: {colors[index]} !important; --mud-palette-action-default-hover: {colors[index]} !important;";
+	}    
+
+
+	private void OnColorSelected(int color)
+	{
+		selectedColor = color;
+		string colorToSend = colors[color];
+		StateHasChanged(); // Force the component to re-render
+		JS.InvokeVoidAsync("setSelectedColor", colorToSend); // Update JavaScript
+	}
+}
