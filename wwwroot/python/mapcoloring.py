@@ -1,5 +1,6 @@
 from itertools import product 
 import math
+import random
 
 class MapColorer:
 
@@ -22,7 +23,7 @@ class MapColorer:
             for color in self.colors :
                 self.domains_dict[state].append(color)
             
-        #print(f"DOMAIN DICT: {self.domains_dict}")
+        print(f"DOMAIN DICT: {self.domains_dict}")
 
     def initializeConstraints(self) :
         """
@@ -62,7 +63,7 @@ class MapColorer:
                         relation.remove(r)
                 self.constraints_dict[state].append(relation)
 
-        #print(self.constraints_dict["WA"])
+        print("initialized constraints...")
 
 
     def getMRV(self) :
@@ -100,7 +101,7 @@ class MapColorer:
             if len(self.domains_dict[state]) == mrv and not state in self.colored_states_dict :
                 MRVstates.append(state)
         
-        print(MRVstates)
+        print(f"MRV {MRVstates}")
         return MRVstates
     
 
@@ -134,9 +135,67 @@ De
                     hdStates.add(state)
                 }
             }
+            
             return hdStates[]
         """
-        pass
+        highestDegree = 0
+        hdState = None
+        for state in states :
+            print(f"finding adjacent state count for {state}")
+            adj_count = 0
+            for adjState in self.adj_dict[state] :
+                if adjState not in self.colored_states_dict :
+                    print(f"{adjState} not colored yet, adding to count")
+                    adj_count += 1
+            if adj_count >= highestDegree :
+                highestDegree = adj_count
+                hdState = state
+
+        print(f"Highest degree: {highestDegree}")
+        
+        return hdState
+
+
+    def checkValidity(self, state, color) :
+        """
+            check whether assignment fits constraint for all state relations
+        """
+        """pseudocode
+        bool valid = false
+        for adjState in adj_dict[state] {                                                   for every adjacent state to the state we want to color     
+            if adjState in colored_states_dict {                                            if the state is colored already 
+                adjColor = colored_states_dict[adjState]                                    store the color of that adjacent state
+                for c in constraints_dict[state] {                                          for each of our requested states constraints 
+                    if(c[0][1] == adjState) {                                               find the constraint for the current adjacent state
+                        for relation in c[1]                                                for every relation in that constraint
+                            if relation.contains(color) and relation.contains(adjColor)     if the relation contains our color and the adj state color
+                                valid = true                                                is valid
+                    }
+                }
+            }
+        }
+        """
+
+        valid = False
+        for adjState in self.adj_dict[state] :
+            if adjState in self.colored_states_dict :
+                adjColor = self.colored_states_dict[adjState]
+                for c in self.constraints_dict[state] :
+                    print(f"[Validity] adjacent state: {adjState}, constraint: {c[0]}")
+                    if adjState in c[0] :
+                        for relation in c[1] :
+                            if relation.contains(color) and adjColor in relation :
+                                valid = True
+        return valid
+
+
+    def updateDomains(self, state, color) :
+        for adjState in self.adj_dict[state] :
+            if adjState not in self.colored_states_dict :
+                if color in self.domains_dict[adjState] :
+                    self.domains_dict[adjState].remove(color)
+            
+
 
     def onePassState(self): 
         """pseudocode
@@ -162,16 +221,40 @@ De
 
         }
 
-
         """
-        pass
 
-    def __init__(self, adj_dict, colors, startColor, startState) :
+        nextState = None
+        colorToSet = None
+        if self.iterations == 0 and self.startState != "" :
+            self.colored_states_dict[self.startState] = None
+            self.colored_states_dict[self.startState] = self.startColor
+        else :
+            MRVStates = self.getMRV()
+            if len(MRVStates) > 1 :
+                highestDegree = self.getHighestDegree(MRVStates)
+                nextState = highestDegree
+            else :
+                nextState = MRVStates[0]
+        
+        if(nextState is not None) :
+            colorToSet = random.choice(self.domains_dict[nextState])
+
+            self.colored_states_dict[nextState] = colorToSet
+            self.updateDomains(nextState,colorToSet)
+
+            print(f"colored_states_dict: {self.colored_states_dict}")
+        else :
+            print("state to add is None!")
+        self.iterations += 1
+        return nextState, colorToSet
+            
+
+
+    def __init__(self, adj_dict, colors, startState, startColor) :
         self.adj_dict = adj_dict #this is X
         self.domains_dict = {} #this is D
-        self.constraints_dict = {} #this is C
-        #self.colors = colors
-        self.colors = ["red","blue","green"]
+        self.constraints_dict = {} #this is C,  ["WA"][ { (WA, ID), ('red','green')
+        self.colors = colors
         self.colored_states_dict = {}
         self.degree_dict = {}
         self.iterations = 0
@@ -183,6 +266,5 @@ De
         #init
         self.initializeDomains()
         self.initializeConstraints()
-        self.getMRV()
-
+        
   

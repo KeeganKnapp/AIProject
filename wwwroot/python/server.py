@@ -1,26 +1,35 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
 import mapcoloring
 
-global MapColorer
+MapColorer = None
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+
 class ColoringRequest:
     def __init__(self, StateId: str, Index: int, Color: list[str]):
         self.StateId = StateId
         self.Index = Index
         self.Color = Color
-        
+
+class ColoringResponse:
+    def __init__(self, StateId: str, Color: str):
+        self.StateId = StateId
+        self.Color = Color
+
+def init(adj_dict, colors, startState, startColorIndex):
+    global MapColorer
+    MapColorer = mapcoloring.MapColorer(adj_dict, colors, startState, startColorIndex)
 
 @app.post("/api/start")
 def start():
         data = request.get_json()
 
         coloring_request = ColoringRequest(
-            StateId=data.get("StateId"),
-            Index=data.get("Index"),
+            StateId=data.get("stateId"),
+            Index=data.get("colorIndex"),
             Color=data.get("availableColors")
         )
         print("Got /api/start request:", data, flush=True)
@@ -30,13 +39,26 @@ def start():
         colors = coloring_request.Color
         startColorIndex = coloring_request.Index
         startState = coloring_request.StateId
-        init(adj_dict, colors, startState, startColorIndex)
+        print(f"Starting with starting state: {startState}, starting color {colors[startColorIndex]}")
+        init(adj_dict, colors, startState, colors[startColorIndex])
 
         return jsonify({"status": "started"}), 200
 
 
-def init(adj_dict, colors, startState, startColorIndex):
-    MapColorer = mapcoloring.MapColorer(adj_dict, colors, startState, startColorIndex)
+
+@app.get("/api/runonce")
+def run_once():
+        print("Got /api/runonce request", flush=True)
+        if MapColorer is None:
+            print("MapColorer not initialized, post start first")
+        stateId, color = MapColorer.onePassState()
+        coloring_response = ColoringResponse(StateId=stateId, Color=color)
+        response_data = {
+            "StateId": coloring_response.StateId,
+            "Color": coloring_response.Color
+        }
+        print("Responding with:", response_data, flush=True)
+        return jsonify(response_data), 200
 
 
 def load_adjacency_matrixes():

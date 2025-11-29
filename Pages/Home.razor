@@ -22,6 +22,9 @@
 <MudButton @onclick="OpenColorPicker" Variant="Variant.Filled" Color="Color.Secondary">
 Add New Color
 </MudButton>
+<MudButton @onclick="RunOnce" Variant="Variant.Filled" Color="Color.Primary">
+Run CSP once
+</MudButton>
 
 <MudText>Number of Colors: @colors.Count</MudText>
 
@@ -59,14 +62,14 @@ margin: 4px !important;
 </MudPaper>
 </div>
 @if (colorPickerOpen) {
-	<MudCard Style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+	<MudCard Color="Color.Secondary" Style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -75%); z-index: 9999; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
 		<MudCardHeader>
 		<CardHeaderContent>
 		<MudText>Pick a color to add!</MudText>	
 		</CardHeaderContent>
 		</MudCardHeader>		
 		<MudCardContent>
-		<MudColorPicker Label="Color picker" @bind-Text="pickedColor" Style="@($"color: {pickedColor};")" Placeholder="Select color" />
+		<MudColorPicker Label="Color picker" ShowAlpha="false" ShowInputs="false" @bind-Text="pickedColor" PickerVariant="PickerVariant.Static" ColorPickerView="ColorPickerView.Grid" Style="@($"color: {pickedColor};")" Placeholder="Select color" />
 		</MudCardContent>
 		<MudCardActions>
 		<MudButton OnClick="CancelColorPicker">Cancel</MudButton>
@@ -86,7 +89,7 @@ margin: 4px !important;
 	//store to send to backend and js
 	private int selectedColor = 0;
 	private int NumColors => colors.Count;
-	private List<string> colors = new() { "#FF0000", "#00FF00", "#0000FF", "#FFFF00" };
+	private List<string> colors = new();
 
 
 
@@ -101,12 +104,12 @@ margin: 4px !important;
 
 			//set color to state in js
 			status = stateId;
-			await ColorState(stateId, selectedColor);
+			await ColorState(stateId, colors[selectedColor]);
 			StateHasChanged();
 		}
 
-	public async Task ColorState(string stateId, int index) {
-		await JS.InvokeVoidAsync("colorState", stateId, colors[index]);
+	public async Task ColorState(string stateId, string color) {
+		await JS.InvokeVoidAsync("colorState", stateId, color);
 	}
 
 	protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -142,6 +145,12 @@ margin: 4px !important;
 		colors.Add(pickedColor);
 		selectedColor = colors.Count - 1;
 		return Task.CompletedTask;
+	}
+
+	private async Task RunOnce() {
+		var res = await ColoringService.RunOnceAsync();
+		await ColorState(res.StateId, res.Color);
+		InvokeAsync(StateHasChanged);
 	}
 
 	private async void StartStateClickMonitoring()
