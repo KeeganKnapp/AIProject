@@ -3,6 +3,8 @@ from flask_cors import CORS
 
 import mapcoloring
 
+global MapColorer
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 class ColoringRequest:
@@ -19,10 +21,23 @@ def start():
         coloring_request = ColoringRequest(
             StateId=data.get("StateId"),
             Index=data.get("Index"),
-            Color=data.get("Color")
+            Color=data.get("availableColors")
         )
         print("Got /api/start request:", data, flush=True)
+        
+        #init mapcolorer with colors and adj matrix
+        adj_dict = load_adjacency_matrixes()
+        colors = coloring_request.Color
+        startColorIndex = coloring_request.Index
+        startState = coloring_request.StateId
+        init(adj_dict, colors, startState, startColorIndex)
+
         return jsonify({"status": "started"}), 200
+
+
+def init(adj_dict, colors, startState, startColorIndex):
+    MapColorer = mapcoloring.MapColorer(adj_dict, colors, startState, startColorIndex)
+
 
 def load_adjacency_matrixes():
     state_adj_dict = {}
@@ -46,8 +61,6 @@ def load_adjacency_matrixes():
 
 if __name__ == "__main__":
     import logging
-    load_adjacency_matrixes();
-    MapColorer = mapcoloring.MapColorer()
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
     app.run(host="127.0.0.1", port=5000, debug=True)
