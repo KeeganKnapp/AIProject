@@ -61,7 +61,8 @@ class MapColorer:
                 for r in relation :
                     if r[0] == r[1] :
                         relation.remove(r)
-                self.constraints_dict[state].append(relation)
+                self.constraints_dict[state].append((scope, relation))
+
 
         print("initialized constraints...")
 
@@ -175,19 +176,44 @@ De
             }
         }
         """
+        print(f"Constraint dict {self.constraints_dict}")
 
-        valid = False
-        for adjState in self.adj_dict[state] :
+        #get all colored states
+        adjColoredStates = {}
+        for adjState in self.adj_dict[state] :                                                  
             if adjState in self.colored_states_dict :
-                adjColor = self.colored_states_dict[adjState]
-                for c in self.constraints_dict[state] :
-                    print(f"[Validity] adjacent state: {adjState}, constraint: {c[0]}")
-                    if adjState in c[0] :
-                        for relation in c[1] :
-                            if relation.contains(color) and adjColor in relation :
-                                valid = True
-        return valid
+                adjColoredStates[adjState] = self.colored_states_dict[adjState]
 
+        print(f"{state} colored adjacents: {adjColoredStates}")
+
+        #return true if no colored adjacent states
+        if len(adjColoredStates) == 0 :
+            print(f"{state} has no colored adjacents")
+            return True
+
+        #if any arent in scope of constraints
+        for coloredAdj in adjColoredStates :
+            in_scope = False     
+            for constraint in self.constraints_dict[state] :
+                if coloredAdj in constraint[0] :
+                    in_scope = True
+            if in_scope :
+                pass
+            else :
+                print(f"{coloredAdj} not in scope of {state}")
+                return False
+
+        #check if relation contains color, adjColor
+        for coloredAdj in adjColoredStates :
+            for constraint in self.constraints_dict[state] :
+                if coloredAdj in constraint[0] :
+                    contains_relation = False
+                    for relation in constraint[1] :
+                        if relation[0] == color and relation[1] == self.colored_states_dict[coloredAdj] :
+                            print(f"relation ({color},{self.colored_states_dict[coloredAdj]}) IS in relations {constraint[1]} ")
+                            return True
+                    print(f"relation ({color},{self.colored_states_dict[coloredAdj]}) is NOT in relations {constraint[1]} ")
+                    return False
 
     def updateDomains(self, state, color) :
         for adjState in self.adj_dict[state] :
@@ -225,32 +251,46 @@ De
 
         nextState = None
         colorToSet = None
-        if self.iterations == 0 and self.startState != "" :
-            self.colored_states_dict[self.startState] = None
-            self.colored_states_dict[self.startState] = self.startColor
+
+        MRVStates = self.getMRV()
+        if len(MRVStates) > 1 :
+            highestDegree = self.getHighestDegree(MRVStates)
+            nextState = highestDegree
+        elif len(MRVStates) == 1 :
+            nextState = MRVStates[0]
         else :
-            MRVStates = self.getMRV()
-            if len(MRVStates) > 1 :
-                highestDegree = self.getHighestDegree(MRVStates)
-                nextState = highestDegree
-            else :
-                nextState = MRVStates[0]
+            print("No states left!")
         
-        if(nextState is not None) :
+        if(nextState is not None and len(self.domains_dict[nextState]) > 0) :
+            #color state
             colorToSet = random.choice(self.domains_dict[nextState])
+            if self.checkValidity(nextState, colorToSet) :
+                self.colored_states_dict[nextState] = colorToSet
+                self.updateDomains(nextState,colorToSet)
 
-            self.colored_states_dict[nextState] = colorToSet
-            self.updateDomains(nextState,colorToSet)
+                fringeAddition = (nextState, [{colorToSet}])
+                self.fringe.append(fringeAddition)
 
-            print(f"colored_states_dict: {self.colored_states_dict}")
+                print(f"fringe: {self.fringe}")
+                print(f"colored_states_dict: {self.colored_states_dict}")
         else :
-            print("state to add is None!")
+            print("cannot color state, attempting backtrack")
+
         self.iterations += 1
-        return nextState, colorToSet
+        return self.domains_dict, nextState, colorToSet
             
+    def backTrack(self) :
+        """
+        get color of the last state assigned and all the adjacent states it removed the color from
+        exclude states that already didn't have the color in their domain
+        give the affected adjacent states the color back to their domain
+        attempt to use another color that isn't in the fringe for that state
+        if there aren't any colors left to use, reset domain and move to next prev state in fringe
 
 
-    def __init__(self, adj_dict, colors, startState, startColor) :
+        """
+
+    def __init__(self, adj_dict, colors, startStates, startColors) :
         self.adj_dict = adj_dict #this is X
         self.domains_dict = {} #this is D
         self.constraints_dict = {} #this is C,  ["WA"][ { (WA, ID), ('red','green')
@@ -258,13 +298,19 @@ De
         self.colored_states_dict = {}
         self.degree_dict = {}
         self.iterations = 0
-        self.startState = startState
-        self.startColor = startColor
+        self.fringe = []    #list of colored states with the colors they have tried so far, so [states][{color1},{color1}]
         #print(f"Map colorer initialized with colors: {colors} and adj_dict: {adj_dict}")
 
 
         #init
         self.initializeDomains()
         self.initializeConstraints()
+
+        #add start state + color if set
+        if self.iterations == 0 and startStates is not None :
+            for i, state in enumerate(startStates) :
+                color = colors[startColors[i]]
+                self.colored_states_dict[state] = color
+                self.updateDomains(state, startColors[i])
         
   

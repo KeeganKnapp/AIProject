@@ -7,43 +7,46 @@ MapColorer = None
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+def init(adj_dict, colors, startStates, startColors):
+    global MapColorer
+    MapColorer = mapcoloring.MapColorer(adj_dict, colors, startStates, startColors)
 
 class ColoringRequest:
-    def __init__(self, StateId: str, Index: int, Color: list[str]):
-        self.StateId = StateId
-        self.Index = Index
-        self.Color = Color
+    def __init__(self, StateIds, SelectedColors, Colors):
+        self.StateIds = StateIds
+        self.SelectedColors = SelectedColors
+        self.Colors = Colors
 
 class ColoringResponse:
-    def __init__(self, StateId: str, Color: str):
+    def __init__(self, DomainsDict, StateId, Color):
+        self.DomainsDict = DomainsDict
         self.StateId = StateId
         self.Color = Color
 
-def init(adj_dict, colors, startState, startColorIndex):
-    global MapColorer
-    MapColorer = mapcoloring.MapColorer(adj_dict, colors, startState, startColorIndex)
 
 @app.post("/api/start")
 def start():
         data = request.get_json()
 
         coloring_request = ColoringRequest(
-            StateId=data.get("stateId"),
-            Index=data.get("colorIndex"),
-            Color=data.get("availableColors")
+            StateIds=data.get("StateIds"),
+            SelectedColors=data.get("SelectedColors"),
+            Colors=data.get("Colors")
         )
         print("Got /api/start request:", data, flush=True)
         
         #init mapcolorer with colors and adj matrix
         adj_dict = load_adjacency_matrixes()
-        colors = coloring_request.Color
-        startColorIndex = coloring_request.Index
-        startState = coloring_request.StateId
-        print(f"Starting with starting state: {startState}, starting color {colors[startColorIndex]}")
-        init(adj_dict, colors, startState, colors[startColorIndex])
+        print("Initialized adjacency dict")
+        
+        init(adj_dict, coloring_request.Colors, coloring_request.StateIds, coloring_request.SelectedColors)
+        print("Initialized mapcolorer")
 
-        return jsonify({"status": "started"}), 200
+        states = []
+        for state in adj_dict.keys():
+            states.append(state)
 
+        return jsonify(states), 200
 
 
 @app.get("/api/runonce")
@@ -51,14 +54,17 @@ def run_once():
         print("Got /api/runonce request", flush=True)
         if MapColorer is None:
             print("MapColorer not initialized, post start first")
-        stateId, color = MapColorer.onePassState()
-        coloring_response = ColoringResponse(StateId=stateId, Color=color)
+        domains_dict, stateId, color = MapColorer.onePassState()
+        coloring_response = ColoringResponse(DomainsDict=domains_dict, StateId=stateId, Color=color)
         response_data = {
+            "Domains": domains_dict,
             "StateId": coloring_response.StateId,
             "Color": coloring_response.Color
         }
         print("Responding with:", response_data, flush=True)
         return jsonify(response_data), 200
+
+
 
 
 def load_adjacency_matrixes():

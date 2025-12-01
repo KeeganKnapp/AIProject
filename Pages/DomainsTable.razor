@@ -1,0 +1,32 @@
+@using MapColoringApp.Services
+@using MudBlazor
+@using System.Diagnostics
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IColoringService ColoringService
+@inject NavigationManager NavigationManager
+
+<MudTable Items="Domains" Hover="true" Bordered="true" Striped="true" Elevation="1">
+    <HeaderContent>
+	<MudTh>State</MudTh>
+	<MudTh>Colors</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+    		<MudTd>@context.Key</MudTd>
+		<MudTd>
+			@foreach (var color in context.Value)
+			{
+				<span style="@GetColorStyle(color)"></span>
+			}
+		</MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+	[Parameter] public Dictionary<string, List<string>> Domains { get; set; }
+
+	private string GetColorStyle(string color)
+	{
+		return $"background-color: {color.ToLower()}; width: 24px; height: 24px; display: inline-block; border-radius: 50%; margin-right: 4px;";
+	}
+}

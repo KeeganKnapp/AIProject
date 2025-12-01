@@ -4,9 +4,31 @@
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 @inject IColoringService ColoringService
+@inject NavigationManager NavigationManager
 @page "/"
 
 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
+
+<MudGrid Justify="Justify.Center">
+
+<MudItem>
+<MudPaper Class="pa-4" Style="max-width: 900px; width: 100%;">
+	<h1>Updates</h1>
+
+	@*Domains table*@
+	<DomainsTable Domains=domains/>
+
+	@*Last MCVs*@
+
+
+	@*Last Highest Degree*@
+
+
+
+</MudPaper>
+</MudItem>
+
+<MudItem>
 <MudPaper Class="pa-4" Style="max-width: 900px; width: 100%;">
 <PageTitle>Interactive Map Coloring!!</PageTitle>
 
@@ -17,14 +39,27 @@
 
 
 <MudCard Elevation="1" Class="pa-4 mt-4">
-<MudText Typo="Typo.h6" Class="mt-4">Select Number of Colors:</MudText>
+<MudText Color="Color.Error" Typo="Typo.h6" Class="mt-4">@status</MudText>
+@if(!cspStarted) {
 
 <MudButton @onclick="OpenColorPicker" Variant="Variant.Filled" Color="Color.Secondary">
 Add New Color
 </MudButton>
+<MudSpacer/>
 <MudButton @onclick="RunOnce" Variant="Variant.Filled" Color="Color.Primary">
+Initialize CSP
+</MudButton>
+}
+else {
+<MudButton @onclick="Reset" Variant="Variant.Filled" Color="Color.Primary">
+Reset
+</MudButton>
+<MudSpacer/>
+<MudButton @onclick="RunOnce" Variant="Variant.Outlined" Color="Color.Primary">
 Run CSP once
 </MudButton>
+}
+
 
 <MudText>Number of Colors: @colors.Count</MudText>
 
@@ -37,7 +72,6 @@ Run CSP once
 
 </MudToggleGroup>
 
-<MudText>@status</MudText>
 
 <style>
 .color-toggle-item.mud-toggle-item-selected {
@@ -60,9 +94,13 @@ margin: 4px !important;
 </MudCard>
 
 </MudPaper>
+</MudItem>
+</MudGrid>
+
 </div>
+
 @if (colorPickerOpen) {
-	<MudCard Color="Color.Secondary" Style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -75%); z-index: 9999; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+	<MudCard Color="Color.Primary" Style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
 		<MudCardHeader>
 		<CardHeaderContent>
 		<MudText>Pick a color to add!</MudText>	
@@ -78,34 +116,45 @@ margin: 4px !important;
 		</MudCard>
 }
 
+
 @code {
 	string status = "";
 
-
+	private Action<object, string> errorHandler;
 	//color picker
 	private bool colorPickerOpen = false;
-	private string pickedColor = "#ffffff";
+	
+	private string pickedColor = "#ff0000";
 
 	//store to send to backend and js
-	private int selectedColor = 0;
+	private int selectedColor;
 	private int NumColors => colors.Count;
 	private List<string> colors = new();
 
+	//to store in ColoringRequest
+	private List<string> initialStateIds = new();
+	private List<int> initialColorsIndexes = new();
 
+	//updates
+	private Dictionary<string, List<string>> domains = new();
 
-	private Dictionary<string, int?> StateAssignments = new();
+	bool cspStarted = false;
+
+	//	private Dictionary<string, int?> StateAssignments = new();
 
 	[JSInvokable]
 		public async Task OnStateClicked(string stateId) {
-			//submit to coloring service to send to backend (tensorflow)
-			var req = new ColoringRequest(stateId, selectedColor, colors);
-			_ = ColoringService.StartAsync(req);
+			//add to respective lists of states and color for each state at index i
+			initialStateIds.Add(stateId);
+			initialColorsIndexes.Add(selectedColor);
 
 
 			//set color to state in js
-			status = stateId;
-			await ColorState(stateId, colors[selectedColor]);
-			StateHasChanged();
+			if(!cspStarted) {
+				status = stateId;
+				await ColorState(stateId, colors[selectedColor]);
+				StateHasChanged();
+			}
 		}
 
 	public async Task ColorState(string stateId, string color) {
@@ -116,15 +165,22 @@ margin: 4px !important;
 	{
 		if (firstRender)
 		{
-			StartStateClickMonitoring();
+		//	StartStateClickMonitoring();
 		}
+	}
+
+	private void HandleError(object sender, string errorMessage)
+	{
+		status = $"Error: {errorMessage}";
+		InvokeAsync(StateHasChanged);
 	}
 
 	protected override async void OnInitialized()
 	{
-
-		await JS.InvokeVoidAsync("setDotNetReference", DotNetObjectReference.Create(this));
+		errorHandler += HandleError;
+	await JS.InvokeVoidAsync("setDotNetReference", DotNetObjectReference.Create(this));
 		selectedColor = 0;
+		domains = new Dictionary<string, List<string>>();
 		// Initialization logic here
 	}
 
@@ -141,19 +197,51 @@ margin: 4px !important;
 	}
 
 	private Task SaveColorPicker() {
+		if(colors.Contains(pickedColor)) {
+			errorHandler?.Invoke(this, "color already exists, pick another");
+			StateHasChanged();
+			return Task.CompletedTask;
+		}
 		colorPickerOpen = false;
 		colors.Add(pickedColor);
 		selectedColor = colors.Count - 1;
 		return Task.CompletedTask;
 	}
 
-	private async Task RunOnce() {
-		var res = await ColoringService.RunOnceAsync();
-		await ColorState(res.StateId, res.Color);
-		InvokeAsync(StateHasChanged);
+	private async Task Reset() {
+		NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
 	}
 
-	private async void StartStateClickMonitoring()
+	private async Task RunOnce() {
+		if(!cspStarted) {
+			if(colors.Count == 0 || colors == null) {
+				errorHandler?.Invoke(this, "Add at least one color to start CSP");
+				InvokeAsync(StateHasChanged);
+				return;
+			}
+			var requestToSend = new ColoringRequest
+			{
+				StateIds = initialStateIds,
+				SelectedColors = initialColorsIndexes,
+				Colors = colors
+			};
+
+			await ColoringService.StartAsync(requestToSend);
+
+			cspStarted = true;
+		}
+		else {
+			var res = await ColoringService.RunOnceAsync();
+			await ColorState(res.StateId, res.Color);
+			domains = res.Domains;
+			//Console.WriteLine(res.Domains);
+
+			InvokeAsync(StateHasChanged);
+		}
+
+	}
+
+	/*private async void StartStateClickMonitoring()
 	{
 		while (true)
 		{
@@ -174,6 +262,7 @@ margin: 4px !important;
 			}
 		}
 	}
+	*/
 
 	private string GetButtonStyle(int index)
 	{
