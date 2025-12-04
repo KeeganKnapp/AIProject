@@ -18,12 +18,15 @@ namespace MapColoringApp.Services
         public List<string> StateIds { get; init; }
         public List<int> SelectedColors { get; init; }
         public List<string> Colors  { get; init; }
+	public string Map { get; init; }
     }
 
     public record ColoringResponse {
 	public string StateId { get; init; }
 	public string Color { get; init; }
 	public Dictionary<string, List<string>> Domains { get; init; }
+	public Dictionary<string, string> ColoredStates { get; init; }
+	public Dictionary<string, List<string>> UsedColors { get; init; }
     };
 
     public class HttpColoringService(HttpClient http) : IColoringService

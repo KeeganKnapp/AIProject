@@ -6,27 +6,67 @@
 @inject IColoringService ColoringService
 @inject NavigationManager NavigationManager
 
-<MudTable Items="Domains" Hover="true" Bordered="true" Striped="true" Elevation="1">
+<MudStack Row=true>
+<MudTable Items="Domains" Height="650px" Bordered="true" Striped="true" Elevation="1">
+	<ToolBarContent>
+        	<MudText>Domains</MudText>
+	</ToolBarContent>
     <HeaderContent>
 	<MudTh>State</MudTh>
 	<MudTh>Colors</MudTh>
     </HeaderContent>
     <RowTemplate>
     		<MudTd>@context.Key</MudTd>
-		<MudTd>
+		@if (ColoredStates.ContainsKey(context.Key))
+		{
+			<MudTd Width="150px">
+				<span style="@GetColorStyle(ColoredStates[context.Key], true)"></span>
+			</MudTd>
+		}
+		else
+		{
+			<MudTd Width="150px">
 			@foreach (var color in context.Value)
 			{
-				<span style="@GetColorStyle(color)"></span>
+				<span style="@GetColorStyle(color, false)"></span>
 			}
-		</MudTd>
+			</MudTd>
+		}
     </RowTemplate>
 </MudTable>
 
+<MudTable Items="UsedColors" Height="650px" Bordered="true" Striped="true" Elevation="1" Reverse="true">
+<ToolBarContent>
+        <MudText>BackTracking used colors</MudText>
+</ToolBarContent>
+<HeaderContent>
+    <MudTh>State</MudTh>
+    <MudTh>Colors</MudTh>
+</HeaderContent>
+<RowTemplate>
+	@if(!(context.Value.Count == 0)) {
+	    <MudTd>@context.Key</MudTd>
+		    <MudTd Width="150px">
+		    @foreach (var color in context.Value)
+		    {
+			    <span style="@GetColorStyle(color, false)"></span>
+		    }
+		    </MudTd>
+	}
+</RowTemplate>
+</MudTable>
+</MudStack>
+
 @code {
 	[Parameter] public Dictionary<string, List<string>> Domains { get; set; }
+	[Parameter] public Dictionary<string, string> ColoredStates { get; set; }
+	[Parameter] public Dictionary<string, List<string>> UsedColors { get; set; }
 
-	private string GetColorStyle(string color)
+	private string GetColorStyle(string color, bool fillCell)
 	{
-		return $"background-color: {color.ToLower()}; width: 24px; height: 24px; display: inline-block; border-radius: 50%; margin-right: 4px;";
+		if(fillCell)
+			return $"background-color: {color.ToLower()}; width: 100%; height: 24px; display: inline-block; border-radius: 4px; margin-right: 4px;";
+		else
+			return $"background-color: {color.ToLower()}; width: 24px; height: 24px; display: inline-block; border-radius: 50%; margin-right: 4px;";
 	}
 }

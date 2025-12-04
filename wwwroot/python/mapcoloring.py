@@ -1,6 +1,7 @@
 from itertools import product 
 import math
 import random
+import copy
 
 class MapColorer:
 
@@ -23,7 +24,6 @@ class MapColorer:
             for color in self.colors :
                 self.domains_dict[state].append(color)
             
-        print(f"DOMAIN DICT: {self.domains_dict}")
 
     def initializeConstraints(self) :
         """
@@ -67,7 +67,7 @@ class MapColorer:
         print("initialized constraints...")
 
 
-    def getMRV(self) :
+    def getMRV(self, exclude = []) :
         """
             returns state(s) with minimum remaining in its domain
         """
@@ -94,12 +94,15 @@ class MapColorer:
         MRVstates = []
         mrv = math.inf
         for state in self.domains_dict :
+            if state in exclude :   #this is for attempting to find next lowest mrv to keep coloring going if trapped
+                continue 
             values = len(self.domains_dict[state])
             if values < mrv and not state in self.colored_states_dict :
                 mrv = values
-                print(mrv)
+                print(mrv, end=" ")
+                print(state, end = " ")
         for state in self.domains_dict :
-            if len(self.domains_dict[state]) == mrv and not state in self.colored_states_dict :
+            if state not in exclude and len(self.domains_dict[state]) == mrv and not state in self.colored_states_dict :
                 MRVstates.append(state)
         
         print(f"MRV {MRVstates}")
@@ -142,6 +145,7 @@ De
         highestDegree = 0
         hdState = None
         for state in states :
+
             print(f"finding adjacent state count for {state}")
             adj_count = 0
             for adjState in self.adj_dict[state] :
@@ -176,7 +180,6 @@ De
             }
         }
         """
-        print(f"Constraint dict {self.constraints_dict}")
 
         #get all colored states
         adjColoredStates = {}
@@ -217,9 +220,9 @@ De
 
     def updateDomains(self, state, color) :
         for adjState in self.adj_dict[state] :
-            if adjState not in self.colored_states_dict :
-                if color in self.domains_dict[adjState] :
-                    self.domains_dict[adjState].remove(color)
+            #if adjState not in self.colored_states_dict :
+            if color in self.domains_dict[adjState] :
+                self.domains_dict[adjState].remove(color)
             
 
 
@@ -249,46 +252,77 @@ De
 
         """
 
+        self.iterations += 1
         nextState = None
         colorToSet = None
 
-        MRVStates = self.getMRV()
-        if len(MRVStates) > 1 :
-            highestDegree = self.getHighestDegree(MRVStates)
-            nextState = highestDegree
-        elif len(MRVStates) == 1 :
-            nextState = MRVStates[0]
-        else :
-            print("No states left!")
-        
-        if(nextState is not None and len(self.domains_dict[nextState]) > 0) :
+        excludedStates = []
+        attempts = 0
+        while attempts < 6 and (nextState is None or len(self.domains_dict[nextState]) == 0) :
+            MRVStates = self.getMRV(excludedStates)
+            if len(MRVStates) > 1 :
+                highestDegree = self.getHighestDegree(MRVStates)  #if multiple mrv use highest degree
+                nextState = highestDegree
+
+            elif len(MRVStates) == 1 :
+                nextState = MRVStates[0]                          #if one mrv use that
+
+            if len(self.domains_dict[nextState]) == 0 :
+                excludedStates.append(nextState)
+            attempts += 1
+
+
+        #get random color in domain and not already used
+        if self.domains_dict[nextState] != [] :
+            if not nextState in self.used_colors:
+                self.used_colors[nextState] = []
+
+            #while colorToSet is None or colorToSet in self.used_colors[nextState] :
+            #colorToSet = rndom.choice(self.domains_dict[nextState])
+            availableColors = list(set(self.domains_dict[nextState]).difference(set(self.used_colors[nextState])))
+
+            if len(availableColors) > 0 :
+                print(f"available colors for {nextState} : {availableColors}")
+                colorToSet = random.choice(availableColors)
+
+        if (nextState is not None 
+           and colorToSet is not None
+           and len(self.domains_dict[nextState]) > 0
+           and self.checkValidity(nextState,colorToSet)) :
+
+            #save domains to stack
+            self.domains_stack.append(copy.deepcopy(dict(self.domains_dict)))
+
             #color state
-            colorToSet = random.choice(self.domains_dict[nextState])
-            if self.checkValidity(nextState, colorToSet) :
-                self.colored_states_dict[nextState] = colorToSet
-                self.updateDomains(nextState,colorToSet)
+            self.colored_states_dict[nextState] = colorToSet
+            self.updateDomains(nextState,colorToSet)
 
-                fringeAddition = (nextState, [{colorToSet}])
-                self.fringe.append(fringeAddition)
+            #add to state fringe and colors used
+            self.fringe.append(nextState)
+            self.used_colors[nextState].append(colorToSet)
 
-                print(f"fringe: {self.fringe}")
-                print(f"colored_states_dict: {self.colored_states_dict}")
+            
+            print("successful CSP run")
         else :
             print("cannot color state, attempting backtrack")
+            self.used_colors[nextState] = []
+            nextState, colorToSet = self.backTrack()
 
-        self.iterations += 1
-        return self.domains_dict, nextState, colorToSet
+        return self.used_colors, self.colored_states_dict, self.domains_dict, nextState, colorToSet
             
     def backTrack(self) :
         """
-        get color of the last state assigned and all the adjacent states it removed the color from
-        exclude states that already didn't have the color in their domain
-        give the affected adjacent states the color back to their domain
-        attempt to use another color that isn't in the fringe for that state
-        if there aren't any colors left to use, reset domain and move to next prev state in fringe
-
+        track all domains at each step in forward stepping function so we can backtrack later
+        also track each state and its used colors so far
+        when we hit a wall at a state, pop the last domains set and set to current
+        then pop the last state and select a new color from list of available colors left
+        when a popped states options are exhausted, pop the next state and reset to that domain
 
         """
+        self.domains_dict = self.domains_stack.pop()    #set current domains to last domains saved
+        lastState = self.fringe.pop()                #get last state colored
+        self.colored_states_dict.pop(lastState)         #de-color state
+        return lastState, "#ffffff"                     #set state white
 
     def __init__(self, adj_dict, colors, startStates, startColors) :
         self.adj_dict = adj_dict #this is X
@@ -298,19 +332,20 @@ De
         self.colored_states_dict = {}
         self.degree_dict = {}
         self.iterations = 0
-        self.fringe = []    #list of colored states with the colors they have tried so far, so [states][{color1},{color1}]
-        #print(f"Map colorer initialized with colors: {colors} and adj_dict: {adj_dict}")
-
+        self.fringe = []    #stack of colored states
+        self.domains_stack = []
+        self.used_colors = {}
 
         #init
         self.initializeDomains()
         self.initializeConstraints()
 
         #add start state + color if set
-        if self.iterations == 0 and startStates is not None :
+        if startStates != [] :
             for i, state in enumerate(startStates) :
                 color = colors[startColors[i]]
+                print(f"Removing {color} from {state} adjacent states domains")
                 self.colored_states_dict[state] = color
-                self.updateDomains(state, startColors[i])
+                self.updateDomains(state, color)
         
   

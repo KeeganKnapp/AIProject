@@ -14,8 +14,9 @@ async function stateColorCallback(stateid) {
 
 
 // Wait for the SVG object to load before accessing its content
-function initializeMap() {
-    const obj = document.querySelector('#us-map');
+window.initializeMap = function (map) {
+    console.log("attempting to load map" + map);
+    const obj = document.querySelector(map);
     
     if (!obj) {
         console.log('SVG object element not found, retrying...');
@@ -114,10 +115,11 @@ window.colorState = function(stateId, color) {
 
 window.getLastClickedState = function() {
     const state = window.lastClickedState;
-    window.lastClickedState = null; // Clear after reading
+    window.lastClickedState = null; 
     return state;
 }
 
+/*
 function waitForBlazor() {
     if (window.Blazor && window.Blazor.start) {
         setTimeout(initializeMap, 500);
@@ -126,5 +128,5 @@ function waitForBlazor() {
     }
 }
 
-//wait for blazor
 waitForBlazor();
+*/

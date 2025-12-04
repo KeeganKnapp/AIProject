@@ -16,12 +16,9 @@
 	<h1>Updates</h1>
 
 	@*Domains table*@
-	<DomainsTable Domains=domains/>
-
-	@*Last MCVs*@
+	<DomainsTable Domains=domains ColoredStates=coloredStates UsedColors=usedColors/>
 
 
-	@*Last Highest Degree*@
 
 
 
@@ -34,12 +31,23 @@
 
 <h1>Interactive US Map</h1>
 
-
+<MudSelect T="string" Disabled="@cspStarted" Label="Choose a map!" ValueChanged="OnMapSelectionChanged">
+	<MudSelectItem Value="@("us-map")">US</MudSelectItem>
+	<MudSelectItem Value="@("ohio-map")">Ohio</MudSelectItem>
+</MudSelect>
+@if(map=="us-map") {
 <object id="us-map" type="image/svg+xml" data="maps/us.svg" width="800" height="500"></object>
+}
+else if(map=="ohio-map") {
+<object id="ohio-map" type="image/svg+xml" data="maps/ohio.svg" width="800" height = "500"></object>
+}
 
 
+@if(map != "") {
 <MudCard Elevation="1" Class="pa-4 mt-4">
 <MudText Color="Color.Error" Typo="Typo.h6" Class="mt-4">@status</MudText>
+
+<MudStack Spacing=1>
 @if(!cspStarted) {
 
 <MudButton @onclick="OpenColorPicker" Variant="Variant.Filled" Color="Color.Secondary">
@@ -55,11 +63,23 @@ else {
 Reset
 </MudButton>
 <MudSpacer/>
-<MudButton @onclick="RunOnce" Variant="Variant.Outlined" Color="Color.Primary">
-Run CSP once
-</MudButton>
+@if(automating == false) {
+	<MudButton @onclick="RunOnce" Variant="Variant.Outlined" Color="Color.Primary">
+		Run CSP once
+	</MudButton>
+	<MudButton @onclick="ToggleAutomate" Variant="Variant.Outlined" Color="Color.Primary">
+		Automate
+	</MudButton>
+}
+else {
+	<MudSlider Size="Size.Medium" min="10" max="@maxAutomateInterval" @bind-Value="automateInterval">Automation Speed</MudSlider>
+	<MudButton @onclick="ToggleAutomate" Variant="Variant.Outlined" Color="Color.Primary">
+		Stop Automating
+	</MudButton>
+}
 }
 
+</MudStack>
 
 <MudText>Number of Colors: @colors.Count</MudText>
 
@@ -92,6 +112,7 @@ margin: 4px !important;
 }
 </style>
 </MudCard>
+}
 
 </MudPaper>
 </MudItem>
@@ -123,6 +144,11 @@ margin: 4px !important;
 	private Action<object, string> errorHandler;
 	//color picker
 	private bool colorPickerOpen = false;
+
+	//automation
+	private bool automating = false;
+	private int automateInterval = 1000;
+	private int maxAutomateInterval = 2000;
 	
 	private string pickedColor = "#ff0000";
 
@@ -131,12 +157,17 @@ margin: 4px !important;
 	private int NumColors => colors.Count;
 	private List<string> colors = new();
 
+	//map selection
+	private string map = "";
+
 	//to store in ColoringRequest
 	private List<string> initialStateIds = new();
 	private List<int> initialColorsIndexes = new();
 
 	//updates
 	private Dictionary<string, List<string>> domains = new();
+	private Dictionary<string, string> coloredStates = new();
+	private Dictionary<string, List<string>> usedColors = new();
 
 	bool cspStarted = false;
 
@@ -161,12 +192,19 @@ margin: 4px !important;
 		await JS.InvokeVoidAsync("colorState", stateId, color);
 	}
 
+
 	protected override async Task OnAfterRenderAsync(bool firstRender)
 	{
 		if (firstRender)
 		{
 		//	StartStateClickMonitoring();
 		}
+	}
+
+	private async void OnMapSelectionChanged(string mp) {
+		map = mp;
+		InvokeAsync(StateHasChanged);
+		await JS.InvokeVoidAsync("initializeMap",$"#{map}");
 	}
 
 	private void HandleError(object sender, string errorMessage)
@@ -178,9 +216,13 @@ margin: 4px !important;
 	protected override async void OnInitialized()
 	{
 		errorHandler += HandleError;
-	await JS.InvokeVoidAsync("setDotNetReference", DotNetObjectReference.Create(this));
+		await JS.InvokeVoidAsync("setDotNetReference", DotNetObjectReference.Create(this));
 		selectedColor = 0;
 		domains = new Dictionary<string, List<string>>();
+		coloredStates = new Dictionary<string, string>();
+		usedColors = new Dictionary<string, List<string>>();
+
+		_ = Automate();
 		// Initialization logic here
 	}
 
@@ -219,11 +261,17 @@ margin: 4px !important;
 				InvokeAsync(StateHasChanged);
 				return;
 			}
+			if(map == "") {
+				errorHandler?.Invoke(this, "Please select a map");
+				InvokeAsync(StateHasChanged);
+				return;
+			}
 			var requestToSend = new ColoringRequest
 			{
 				StateIds = initialStateIds,
 				SelectedColors = initialColorsIndexes,
-				Colors = colors
+				Colors = colors,
+				Map = map
 			};
 
 			await ColoringService.StartAsync(requestToSend);
@@ -234,11 +282,37 @@ margin: 4px !important;
 			var res = await ColoringService.RunOnceAsync();
 			await ColorState(res.StateId, res.Color);
 			domains = res.Domains;
-			//Console.WriteLine(res.Domains);
-
+			coloredStates = res.ColoredStates;
+			usedColors = res.UsedColors;
+			
+			/*
+			Console.WriteLine($"Domains counts per state");
+			foreach(var domain in res.Domains.Keys) {
+				foreach(var c in res.Domains[domain])
+					Console.WriteLine($"{c}");
+			}
+			*/
+			
 			InvokeAsync(StateHasChanged);
 		}
 
+	}
+
+	private async Task ToggleAutomate() {
+		automating = !automating;
+	}
+
+	private async Task Automate() {
+		await Task.Delay(maxAutomateInterval - automateInterval);
+		if(automating && cspStarted) {
+			var res = await ColoringService.RunOnceAsync();
+			await ColorState(res.StateId, res.Color);
+			domains = res.Domains;
+			coloredStates = res.ColoredStates;
+			usedColors = res.UsedColors;
+			InvokeAsync(StateHasChanged);
+		}
+		Automate();
 	}
 
 	/*private async void StartStateClickMonitoring()
