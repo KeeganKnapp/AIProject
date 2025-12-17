@@ -330,7 +330,6 @@ De
         self.constraints_dict = {} #this is C,  ["WA"][ { (WA, ID), ('red','green')
         self.colors = colors
         self.colored_states_dict = {}
-        self.degree_dict = {}
         self.iterations = 0
         self.fringe = []    #stack of colored states
         self.domains_stack = []

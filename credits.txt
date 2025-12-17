@@ -1,0 +1,23 @@
+Ohio Adjacency list:
+U. C. Bureau, “County Adjacency File,” Census.gov, Aug. 23, 2024. https://www.census.gov/geographies/reference-files/time-series/geo/county-adjacency.html
+
+US Adjacency List:
+writeonly, “Adjacency List of States of the United States (US),” write-only by Gregg Lind, Mar. 20, 2009. https://writeonly.wordpress.com/2009/03/20/adjacency-list-of-states-of-the-united-states-us/ (accessed Dec. 08, 2025).
+
+Blazor:
+Microsoft, “Blazor | Build client web apps with C# | .NET,” Microsoft, 2024. https://dotnet.microsoft.com/en-us/apps/aspnet/web-apps/blazor
+
+Mudblazor component lib:
+MudBlazor Team, “MudBlazor - Blazor Component Library,” MudBlazor. https://mudblazor.com/
+
+Flask:
+Flask, “Welcome to Flask — Flask Documentation (3.0.x),” Palletsprojects.com, 2010. https://flask.palletsprojects.com/en/stable/
+
+Ohio SVG:
+Wikipedia Contributers, “Category:SVG maps of Ohio - Wikimedia Commons,” Wikimedia.org, 2022. https://commons.wikimedia.org/wiki/Category:SVG_maps_of_Ohio (accessed Dec. 08, 2025).
+
+Equations for functions:
+S. Russel and P. Norvig, Artificial intelligence: A Modern approach, 4th ed. Prentice Hall, 2021.
+
+United States SVG:
+Simple Maps Team, “Free Blank United States Map in SVG - Resources | Simplemaps.com,” simplemaps.com. https://simplemaps.com/resources/svg-usmap: https://simplemaps.com/resources/svg-us
